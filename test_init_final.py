@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*- 
 
-################ Server V16.3 #####################
+################ Server V16.5 #####################
 
 import os
 import sys
@@ -643,9 +643,10 @@ async def task():
 
 #mp3 파일 생성함수(gTTS 이용, 남성목소리)
 async def MakeSound(saveSTR, filename):
-	'''
+	
 	tts = gTTS(saveSTR, lang = 'ko')
-	tts.save('./' + filename + '.mp3')
+	tts.save('./' + filename + '.wav')
+	
 	'''
 	try:
 		encText = urllib.parse.quote(saveSTR)
@@ -655,7 +656,7 @@ async def MakeSound(saveSTR, filename):
 		tts = gTTS(saveSTR, lang = 'ko')
 		tts.save('./' + filename + '.wav')
 		pass
-
+	'''
 #mp3 파일 재생함수	
 async def PlaySound(voiceclient, filename):
 	source = discord.FFmpegPCMAudio(filename)
@@ -874,6 +875,9 @@ def convertToInitialLetters(text):
 
 	def isHangul(ch):
 		return ord(ch) >= JAMO_START_LETTER and ord(ch) <= JAMO_END_LETTER
+	
+	def isBlankOrNumber(ch):
+		return ord(ch) == 32 or ord(ch) >= 48 and ord(ch) <= 57
 
 	def convertNomalInitialLetter(ch):
 		dic_InitalLetter = {4352:"ㄱ"
@@ -895,6 +899,17 @@ def convertToInitialLetters(text):
 							,4368:"ㅌ"
 							,4369:"ㅍ"
 							,4370:"ㅎ"
+							,32:" "
+							,48:"0"
+							,49:"1"
+							,50:"2"
+							,51:"3"
+							,52:"4"
+							,53:"5"
+							,54:"6"
+							,55:"7"
+							,56:"8"
+							,57:"9"
 		}
 		return dic_InitalLetter[ord(ch)]
 
@@ -902,6 +917,8 @@ def convertToInitialLetters(text):
 	for ch in text:
 		if isHangul(ch): #한글이 아닌 글자는 걸러냅니다.
 			result += convertNomalInitialLetter(chr((int((ord(ch)-JAMO_START_LETTER)/JAMO_CYCLE))+CHOSUNG_START_LETTER))
+		elif isBlankOrNumber(ch):
+			result += convertNomalInitialLetter(chr(int(ord(ch))))
 
 	return result
 
@@ -1039,15 +1056,17 @@ while True:
 			if basicSetting[6] != "":
 				voice_client1 = await client.get_channel(basicSetting[6]).connect(reconnect=True)
 				print('< 음성채널 [' + client.get_channel(basicSetting[6]).name + '] 접속완료>')
-			if basicSetting[10] != "":
-				print('< 사다리채널 [' + client.get_channel(int(basicSetting[10])).name + '] 접속완료>')
-			if basicSetting[13] != "":
-				print('< 정산채널 [' + client.get_channel(int(basicSetting[13])).name + '] 접속완료>')
-			if basicSetting[20] != "":
-				print('< 척살채널 [' + client.get_channel(int(basicSetting[20])).name + '] 접속완료>')
-			if int(basicSetting[12]) != 0 :
+			if basicSetting[8] != "":
+				print('< 사다리채널 [' + client.get_channel(int(basicSetting[8])).name + '] 접속완료>')
+			if basicSetting[11] != "":
+				print('< 정산채널 [' + client.get_channel(int(basicSetting[11])).name + '] 접속완료>')
+			if basicSetting[18] != "":
+				print('< 척살채널 [' + client.get_channel(int(basicSetting[18])).name + '] 접속완료>')
+			if basicSetting[19] != "":
+				print('< 경주채널 [' + client.get_channel(int(basicSetting[19])).name + '] 접속완료>')
+			if int(basicSetting[13]) != 0 :
 				print('< 보탐봇 재시작 시간 ' + endTime.strftime('%Y-%m-%d ') + endTime.strftime('%H:%M:%S') + ' >')
-				print('< 보탐봇 재시작 주기 ' + basicSetting[12] + '일 >')
+				print('< 보탐봇 재시작 주기 ' + basicSetting[13] + '일 >')
 			else :
 				print('< 보탐봇 재시작 설정안됨 >')
 
@@ -1086,7 +1105,7 @@ while True:
 			command_list += ','.join(command[19]) + ' [공지내용]\n'     #!공지
 			command_list += ','.join(command[20]) + '\n'     #!공지삭제
 			command_list += ','.join(command[21]) + ' [할말]\n'     #!상태
-			command_list += ','.join(command[28]) + '사다리, 정산, 척살, 경주\n\n'     #!채널설정
+			command_list += ','.join(command[28]) + ' 사다리, 정산, 척살, 경주\n\n'     #!채널설정
 			command_list += ','.join(command[22]) + '\n'     #보스탐
 			command_list += ','.join(command[23]) + '\n'     #!보스탐
 			command_list += '[보스명]컷 또는 [보스명]컷 0000, 00:00\n'  
@@ -1102,7 +1121,7 @@ while True:
 					)
 			embed.add_field(
 					name="----- 추가기능 -----",
-					value= '```- [보스명]컷/멍/예상  [할말] : 보스시간 입력 후 빈칸 두번!! 메모 가능\n- [보스명]컷 명령어는 초성으로 입력가능합니다.\n  ex)기감컷 => ㄱㄱㅋ```'
+					value= '```- [보스명]컷/멍/예상  [할말] : 보스시간 입력 후 빈칸 두번!! 메모 가능\n- [보스명]컷 명령어는 초성으로 입력가능합니다.\n  ex)기감컷 => ㄱㄱㅋ, 기감 컷 => ㄱㄱ ㅋ```'
 					)
 			await ctx.send( embed=embed, tts=False)
 		else:
@@ -1113,7 +1132,7 @@ while True:
 	async def setting_(ctx):	
 		#print (ctx.message.channel.id)
 		if ctx.message.channel.id == basicSetting[7]:
-			setting_val = '보탐봇버전 : Server Ver. 16.3 (2020. 5. 14.)\n'
+			setting_val = '보탐봇버전 : Server Ver. 16.5 (2020. 6. 3.)\n'
 			setting_val += '음성채널 : ' + client.get_channel(basicSetting[6]).name + '\n'
 			setting_val += '텍스트채널 : ' + client.get_channel(basicSetting[7]).name +'\n'
 			if basicSetting[8] != "" :
@@ -1127,7 +1146,6 @@ while True:
 			setting_val += '보스젠알림시간1 : ' + basicSetting[1] + ' 분 전\n'
 			setting_val += '보스젠알림시간2 : ' + basicSetting[3] + ' 분 전\n'
 			setting_val += '보스멍확인시간 : ' + basicSetting[2] + ' 분 후\n'
-			setting_val += '도움주신분들 : 옹님'
 			embed = discord.Embed(
 					title = "----- 설정내용 -----",
 					description= f'```{setting_val}```',
@@ -1135,7 +1153,7 @@ while True:
 					)
 			embed.add_field(
 					name="----- 도움주신분들 -----",
-					value= '```초성입력기능 : 옹님```'
+					value= '```정산기능 : 총무님\n초성입력기능 : 옹님```'
 					)
 			await ctx.send(embed=embed, tts=False)
 		else:
@@ -2524,7 +2542,7 @@ while True:
 
 				for i in range(bossNum):
 					################ 보스 컷처리 ################ 
-					if message.content.startswith(bossData[i][0] +'컷') or message.content.startswith(convertToInitialLetters(bossData[i][0] +'컷')) or message.content.startswith(bossData[i][0] +' 컷'):
+					if message.content.startswith(bossData[i][0] +'컷') or message.content.startswith(convertToInitialLetters(bossData[i][0] +'컷')) or message.content.startswith(bossData[i][0] +' 컷') or message.content.startswith(convertToInitialLetters(bossData[i][0] +' 컷')):
 						if hello.find('  ') != -1 :
 							bossData[i][6] = hello[hello.find('  ')+2:]
 							hello = hello[:hello.find('  ')]
@@ -2580,17 +2598,18 @@ while True:
 
 					################ 보스 멍 처리 ################ 
 
-					if message.content.startswith(bossData[i][0] +' 멍'):
+					if message.content.startswith(bossData[i][0] +'멍'):
 						if hello.find('  ') != -1 :
 							bossData[i][6] = hello[hello.find('  ')+2:]
 							hello = hello[:hello.find('  ')]
 						else:
 							bossData[i][6] = ''
 							
-						tmp_msg = bossData[i][0] +' 멍'
+						tmp_msg = bossData[i][0] +'멍'
 						tmp_now = datetime.datetime.now() + datetime.timedelta(hours = int(basicSetting[0]))
 
 						if len(hello) > len(tmp_msg) + 3 :
+							temptime = tmp_now
 							if hello.find(':') != -1 :
 								chkpos = hello.find(':')
 								hours1 = hello[chkpos-2:chkpos] 
@@ -2602,29 +2621,24 @@ while True:
 								minutes1 = hello[chkpos:chkpos+2]					
 								temptime = tmp_now.replace(hour=int(hours1), minute=int(minutes1))
 							
-							nextTime = temptime + datetime.timedelta(hours = int(bossData[i][1]), minutes = int(bossData[i][5]))
-							
 							bossMungCnt[i] = 0
 							bossFlag[i] = False
 							bossFlag0[i] = False
 							bossMungFlag[i] = False
-							bossMungCnt[i] = bossMungCnt[i] + 1
 
-							if nextTime > tmp_now :
-								nextTime = nextTime + datetime.timedelta(days=int(-1))
+							if temptime > tmp_now :
+								temptime = temptime + datetime.timedelta(days=int(-1))
 
-							if nextTime < tmp_now :
+							if temptime < tmp_now :
 								deltaTime = datetime.timedelta(hours = int(bossData[i][1]), minutes = int(bossData[i][5]))
-								while tmp_now > nextTime :
-									nextTime = nextTime + deltaTime
+								while temptime < tmp_now :
+									temptime = temptime + deltaTime
 									bossMungCnt[i] = bossMungCnt[i] + 1
-							else :
-								nextTime = nextTime
 
-							tmp_bossTime[i] = bossTime[i] = nextTime				
+							tmp_bossTime[i] = bossTime[i] = temptime				
 
-							tmp_bossTimeString[i] = bossTimeString[i] = nextTime.strftime('%H:%M:%S')
-							tmp_bossDateString[i] = bossDateString[i] = nextTime.strftime('%Y-%m-%d')
+							tmp_bossTimeString[i] = bossTimeString[i] = temptime.strftime('%H:%M:%S')
+							tmp_bossDateString[i] = bossDateString[i] = temptime.strftime('%Y-%m-%d')
 							embed = discord.Embed(
 									description= '```다음 ' + bossData[i][0] + ' ' + bossTimeString[i] + '입니다.```',
 									color=0xff0000
@@ -2655,14 +2669,14 @@ while True:
 						
 				################ 예상 보스 타임 입력 ################ 
 
-					if message.content.startswith(bossData[i][0] +' 예상'):
+					if message.content.startswith(bossData[i][0] +'예상'):
 						if hello.find('  ') != -1 :
 							bossData[i][6] = hello[hello.find('  ')+2:]
 							hello = hello[:hello.find('  ')]
 						else:
 							bossData[i][6] = ''
 							
-						tmp_msg = bossData[i][0] +' 예상'
+						tmp_msg = bossData[i][0] +'예상'
 						if len(hello) > len(tmp_msg) + 3 :
 							if hello.find(':') != -1 :
 								chkpos = hello.find(':')
