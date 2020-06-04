@@ -21,6 +21,13 @@ from oauth2client.service_account import ServiceAccountCredentials #정산
 from io import StringIO
 import urllib.request
 from math import ceil, floor
+import uuid
+import requests
+import rsa
+import lzstring
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+
 
 ##################### 로깅 ###########################
 log_stream = StringIO()    
@@ -77,7 +84,9 @@ client = commands.Bot(command_prefix="", help_command = None, description='일�
 access_token = os.environ["BOT_TOKEN"]			
 git_access_token = os.environ["GIT_TOKEN"]			
 git_access_repo = os.environ["GIT_REPO"]			
-git_access_repo_restart = os.environ["GIT_REPO_RESTART"]			
+git_access_repo_restart = os.environ["GIT_REPO_RESTART"]	
+naver_ID = 	os.environ["NAVER_ID"]	
+naver_PW =  os.environ["NAVER_PW"]	
 
 g = Github(git_access_token)
 repo = g.get_repo(git_access_repo)
@@ -224,6 +233,7 @@ def init():
 	basicSetting.append(inputData[10][13:])     #basicSetting[17] : 멍삭제횟수
 	basicSetting.append(inputData[5][14:])     #basicSetting[18] : kill채널 ID
 	basicSetting.append(inputData[6][16:])     #basicSetting[19] : racing 채널 ID
+	basicSetting.append(inputData[19][12:])     #basicSetting[20] : voicetype
 
 	############## 보탐봇 명령어 리스트 #####################
 	for i in range(len(command_inputData)):
@@ -641,15 +651,58 @@ async def task():
 
 		await asyncio.sleep(1) # task runs every 60 seconds
 
-#mp3 파일 생성함수(gTTS 이용, 남성목소리)
-async def MakeSound(saveSTR, filename):
+#####음성파일 생성을 위한 로그인함수들...
+def encrypt(key_str, uid, upw):
+	def naver_style_join(l):
+		return ''.join([chr(len(s)) + s for s in l])
 	
+	sessionkey, keyname, e_str, n_str = key_str.split(',')
+	e, n = int(e_str, 16), int(n_str, 16)
+	
+	message = naver_style_join([sessionkey, uid, upw]).encode()
+	
+	pubkey = rsa.PublicKey(e, n)
+	encrypted = rsa.encrypt(message, pubkey)
+	
+	return keyname, encrypted.hex()
+
+def encrypt_account(uid, upw):
+	key_str = requests.get('https://nid.naver.com/login/ext/keys.nhn').content.decode("utf-8")
+
+	return encrypt(key_str, uid, upw)
+
+def naver_session(nid, npw):
+	encnm, encpw = encrypt_account(nid, npw)
+
+	s = requests.Session()
+
+	retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
+
+	s.mount('https://', HTTPAdapter(max_retries=retries))
+	
+	request_headers = { 'User-agent': 'Mozilla/5.0' }
+
+	bvsd_uuid = uuid.uuid4()
+	encData = '{"a":"%s-4","b":"1.3.4","d":[{"i":"id","b":{"a":["0,%s"]},"d":"%s","e":false,"f":false},{"i":"%s","e":true,"f":false}],"h":"1f","i":{"a":"chorme/83.0"}}' % (bvsd_uuid, nid, nid, npw)
+	bvsd = '{"uuid":"%s","encData":"%s"}' % (bvsd_uuid, lzstring.LZString.compressToEncodedURIComponent(encData))
+
+	resp = s.post('https://nid.naver.com/nidlogin.login', data={ 'svctype': '0', 'enctp': '1', 'encnm': encnm, 'enc_url': 'http0X0.0000000000001P-10220.0000000.000000www.naver.com', 'url': 'www.naver.com', 'smart_level': '1', 'encpw': encpw, 'bvsd': bvsd }, headers=request_headers)
+	finalize_url = re.search(r'location\.replace\("([^"]+)"\)', resp.content.decode("utf-8")).group(1)
+	
+	s.get(finalize_url)
+
+	return s
+
+#mp3 파일 생성함수
+async def MakeSound(Nid, Npw, saveSTR, filename):
+	'''
 	tts = gTTS(saveSTR, lang = 'ko')
 	tts.save('./' + filename + '.wav')
-	
+	'''
 	'''
 	try:
 		encText = urllib.parse.quote(saveSTR)
+		#print(encText)
 		urllib.request.urlretrieve("https://clova.ai/proxy/voice/api/tts?text=" + encText + "%0A&voicefont=1&format=wav",filename + '.wav')
 	except Exception as e:
 		print (e)
@@ -657,6 +710,17 @@ async def MakeSound(saveSTR, filename):
 		tts.save('./' + filename + '.wav')
 		pass
 	'''
+	if Nid != "" and Npw != "":
+		s = naver_session(Nid, Npw)
+		encText = urllib.parse.quote(saveSTR)
+		pp = s.get("https://clovadubbing.naver.com/project/voicefont/" + basicSetting[20] + "/preview?text="+ encText)
+		result = pp.content
+		with open('./' + filename + '.wav', 'wb') as f:
+			f.write(result)
+	else:
+		tts = gTTS(saveSTR, lang = 'ko')
+		tts.save('./' + filename + '.wav')
+		
 #mp3 파일 재생함수	
 async def PlaySound(voiceclient, filename):
 	source = discord.FFmpegPCMAudio(filename)
@@ -707,12 +771,12 @@ async def dbSave():
 						if bossData[i][2] == '0' :
 							information1 += ' - ' + bossData[i][0] + '(' + bossData[i][1] + '.' + bossData[i][5] + ') : ' + tmp_bossTime[i].strftime('%H:%M:%S') + ' @ ' + tmp_bossTime[i].strftime('%Y-%m-%d') + ' (미입력 ' + str(bossMungCnt[i]) + '회)' + ' * ' + bossData[i][6] + '\n'
 						else : 
-							information1 += ' - ' + bossData[i][0] + '(' + bossData[i][1] + '.' + bossData[i][5] + ') : ' + tmp_bossTime[i].strftime('%H:%M:%S') + ' @ ' + tmp_bossTime[i].strftime('%Y-%m-%d') + ' ( 멍 ' + str(bossMungCnt[i]) + '회)' + ' * ' + bossData[i][6] + '\n'
+							information1 += ' - ' + bossData[i][0] + '(' + bossData[i][1] + '.' + bossData[i][5] + ') : ' + tmp_bossTime[i].strftime('%H:%M:%S') + ' @ ' + tmp_bossTime[i].strftime('%Y-%m-%d') + ' (멍 ' + str(bossMungCnt[i]) + '회)' + ' * ' + bossData[i][6] + '\n'
 					else:
 						if bossData[i][2] == '0' :
 							information1 += ' - ' + bossData[i][0] + '(' + bossData[i][1] + '.' + bossData[i][5] + ') : ' + bossTimeString[i] + ' @ ' + bossDateString[i] + ' (미입력 ' + str(bossMungCnt[i]) + '회)' + ' * ' + bossData[i][6] + '\n'
 						else : 
-							information1 += ' - ' + bossData[i][0] + '(' + bossData[i][1] + '.' + bossData[i][5] + ') : ' + bossTimeString[i] + ' @ ' + bossDateString[i] + ' ( 멍 ' + str(bossMungCnt[i]) + '회)' + ' * ' + bossData[i][6] + '\n'
+							information1 += ' - ' + bossData[i][0] + '(' + bossData[i][1] + '.' + bossData[i][5] + ') : ' + bossTimeString[i] + ' @ ' + bossDateString[i] + ' (멍 ' + str(bossMungCnt[i]) + '회)' + ' * ' + bossData[i][6] + '\n'
 						
 	try :
 		contents = repo.get_contents("my_bot.db")
@@ -1730,7 +1794,7 @@ while True:
 		if ctx.message.channel.id == basicSetting[7]:
 			msg = ctx.message.content[len(ctx.invoked_with)+1:]
 			sayMessage = msg
-			await MakeSound(ctx.message.author.display_name +'님이, ' + sayMessage, './sound/say')
+			await MakeSound(naver_ID, naver_PW, ctx.message.author.display_name +'님이, ' + sayMessage, './sound/say')
 			await ctx.send("```< " + ctx.author.display_name + " >님이 \"" + sayMessage + "\"```", tts=False)
 			await PlaySound(voice_client1, './sound/say.wav')
 		else:
@@ -1883,7 +1947,7 @@ while True:
 							if ouput_bossData[i][5] == 0 :
 								boss_information[cnt] = boss_information[cnt] + ouput_bossData[i][3] + ' ' + ouput_bossData[i][2] + ' : ' + ouput_bossData[i][0] + ' ' + ouput_bossData[i][6] + '\n'
 							else :
-								boss_information[cnt] = boss_information[cnt] + ouput_bossData[i][3] + ' ' + ouput_bossData[i][2] + ' : ' + ouput_bossData[i][0] + ' ( 멍 ' + str(ouput_bossData[i][5]) + '회)' + ' ' + ouput_bossData[i][6] + '\n'
+								boss_information[cnt] = boss_information[cnt] + ouput_bossData[i][3] + ' ' + ouput_bossData[i][2] + ' : ' + ouput_bossData[i][0] + ' (멍 ' + str(ouput_bossData[i][5]) + '회)' + ' ' + ouput_bossData[i][6] + '\n'
 
 			if len(boss_information) == 1 and len(tmp_boss_information) == 1:
 				###########################
@@ -2053,7 +2117,7 @@ while True:
 							if ouput_bossData[i][5] == 0 :
 								boss_information[cnt] = boss_information[cnt] + ouput_bossData[i][3] + ' ' + ouput_bossData[i][2] + ' : ' + ouput_bossData[i][0] + ' ' + ouput_bossData[i][6] + '\n'
 							else :
-								boss_information[cnt] = boss_information[cnt] + ouput_bossData[i][3] + ' ' + ouput_bossData[i][2] + ' : ' + ouput_bossData[i][0] + ' ( 멍 ' + str(ouput_bossData[i][5]) + '회)' + ' ' + ouput_bossData[i][6] + '\n'
+								boss_information[cnt] = boss_information[cnt] + ouput_bossData[i][3] + ' ' + ouput_bossData[i][2] + ' : ' + ouput_bossData[i][0] + ' (멍 ' + str(ouput_bossData[i][5]) + '회)' + ' ' + ouput_bossData[i][6] + '\n'
 
 			###########################고정보스출력
 			if len(fixedboss_information[0]) != 0:
@@ -2598,14 +2662,14 @@ while True:
 
 					################ 보스 멍 처리 ################ 
 
-					if message.content.startswith(bossData[i][0] +' 멍'):
+					if message.content.startswith(bossData[i][0] +'멍'):
 						if hello.find('  ') != -1 :
 							bossData[i][6] = hello[hello.find('  ')+2:]
 							hello = hello[:hello.find('  ')]
 						else:
 							bossData[i][6] = ''
 							
-						tmp_msg = bossData[i][0] +' 멍'
+						tmp_msg = bossData[i][0] +'멍'
 						tmp_now = datetime.datetime.now() + datetime.timedelta(hours = int(basicSetting[0]))
 
 						if len(hello) > len(tmp_msg) + 3 :
